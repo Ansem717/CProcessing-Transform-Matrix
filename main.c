@@ -26,9 +26,8 @@ CP_Matrix scale;
 CP_Matrix rotate;
 
 float scalarValue;
-float thetaX;
-float thetaY;
-float thetaZ;
+float thetaX, thetaY, thetaZ;
+float thetaIncrement;
 
 typedef struct {
     float xPos;
@@ -81,22 +80,28 @@ Cube newCube(float x, float y, float z, float w, float h, float d) {
 
 
 CP_Matrix rotationX() {
-    return CP_Matrix_Set(1, 0, 0, 0, cos(thetaX), -sin(thetaX), 0, sin(thetaX), cos(thetaX));
+    return CP_Matrix_Set(
+        1, 0, 0, 
+        0, cos(thetaX), -sin(thetaX), 
+        0, sin(thetaX), cos(thetaX));
 }
 
 CP_Matrix rotationY() {
-    return CP_Matrix_Set(cos(thetaY), 0, sin(thetaY), 0, 1, 0, -sin(thetaY), 0, cos(thetaY));
+    return CP_Matrix_Set(
+        cos(thetaY), 0, sin(thetaY), 
+        0, 1, 0, 
+        -sin(thetaY), 0, cos(thetaY));
 }
 
 CP_Matrix rotationZ() {
-    return CP_Matrix_Set(cos(thetaZ), -sin(thetaZ), 0, sin(thetaZ), cos(thetaZ), 0, 0, 0, 1);
+    return CP_Matrix_Set(
+        cos(thetaZ), -sin(thetaZ), 0,
+        sin(thetaZ), cos(thetaZ), 0,
+        0, 0, 1);
 }
 
 Cube projectPoints(Cube c) {
     for (int i = 0; i < CUBE_POINTS_ARRAY_SIZE; i++) {
-
-
-
         CP_Matrix projectionMultipled = CP_Matrix_Multiply(
             projMatrix,
             CP_Matrix_Multiply(
@@ -115,11 +120,10 @@ Cube projectPoints(Cube c) {
     return c;
 }
 
-
-
 void game_init(void)
 {
-    CP_System_Fullscreen();
+    //CP_System_Fullscreen();
+    CP_System_SetWindowSize(800, 800);
 
     position = CP_Vector_Set(CP_System_GetWindowWidth() * 0.5f, CP_System_GetWindowHeight() * 0.5f);
     // Create a transform matrix
@@ -128,6 +132,7 @@ void game_init(void)
     thetaX = 0;
     thetaY = 0;
     thetaZ = 0;
+    thetaIncrement = 0.02f;
 
     projMatrix = CP_Matrix_Set(1, 0, 0, 0, 1, 0, 0, 0, 0);
 
@@ -141,10 +146,145 @@ void game_init(void)
     CP_Settings_TextAlignment(CP_TEXT_ALIGN_H_CENTER, CP_TEXT_ALIGN_V_MIDDLE);
 }
 
-void drawRectAsQuad(float x, float y, float w, float h) {
-    float w2 = w / 2;
-    float h2 = h / 2;
-    //CP_Graphics_DrawQuad(x - w2, y - h2 - tan(theta)*w, x - w2, y + h2 + tan(theta)*w, x + h2, y + h2 + tan(theta) * w, x + h2, y - h2 - tan(theta) * w);
+void drawCubeLines(Cube c) {
+    CP_Graphics_DrawLine(c.points2D[0].x, c.points2D[0].y, c.points2D[1].x, c.points2D[1].y);
+    CP_Graphics_DrawLine(c.points2D[0].x, c.points2D[0].y, c.points2D[3].x, c.points2D[3].y);
+    CP_Graphics_DrawLine(c.points2D[0].x, c.points2D[0].y, c.points2D[4].x, c.points2D[4].y);
+    CP_Graphics_DrawLine(c.points2D[1].x, c.points2D[1].y, c.points2D[2].x, c.points2D[2].y);
+    CP_Graphics_DrawLine(c.points2D[1].x, c.points2D[1].y, c.points2D[5].x, c.points2D[5].y);
+    CP_Graphics_DrawLine(c.points2D[2].x, c.points2D[2].y, c.points2D[3].x, c.points2D[3].y);
+    CP_Graphics_DrawLine(c.points2D[2].x, c.points2D[2].y, c.points2D[6].x, c.points2D[6].y);
+    CP_Graphics_DrawLine(c.points2D[7].x, c.points2D[7].y, c.points2D[3].x, c.points2D[3].y);
+    CP_Graphics_DrawLine(c.points2D[7].x, c.points2D[7].y, c.points2D[4].x, c.points2D[4].y);
+    CP_Graphics_DrawLine(c.points2D[7].x, c.points2D[7].y, c.points2D[6].x, c.points2D[6].y);
+    CP_Graphics_DrawLine(c.points2D[5].x, c.points2D[5].y, c.points2D[4].x, c.points2D[4].y);
+    CP_Graphics_DrawLine(c.points2D[5].x, c.points2D[5].y, c.points2D[6].x, c.points2D[6].y);
+}
+
+int getCloesestVertexIndex(Cube c) {
+    /*
+        if COS(ThetaY) is positive, RED FACE    (index 0154)
+        if COS(ThetaY) is negative, MAGETA FACE (index 2367)
+
+        if SIN(ThetaY) is positive, YELLOW FACE (index 1256)
+        if SIN(ThetaY) is negative, CYAN FACE   (index 3047)
+
+        if SIN(ThetaX) is positive, GREEN FACE  (index 4567)
+        if SIN(ThetaX) is negative, BLUE FACE   (index 0123)
+
+        We should have 6 inputs, 3 outputs, then we'll compare them and should get one vertex.
+
+        Examples:
+            pos pos pos = R Y G = 0154, 1256, 4567 | Compare Numbers: 0154 15 5 | 5 is the only one all three share, that's our vertex.
+
+            neg pos neg = M Y B = 2367, 1256, 0123 | Compare Numbers: 2367 26 2 | 2 is our vertex.
+
+
+        Actually, I realized this is all global math and shouldn't *need* a cube passed in.
+        I'm going to list all possibilities and see what happens
+
+        ppp = 5
+        ppn = 1
+        pnp = 4
+        pnn = 0
+        npp = 6
+        npn = 2
+        nnp = 7
+        nnn = 3
+
+        Start with the end and work our way backwards to figure out the algorithm:
+            If the LAST condition is Positive, add 4:
+            PPN = 1, PPP = 5 | PNN = 0, PNP = 4 | etc.
+
+        Now we have the following sequence:
+            PP = 1 | PN = 0 | NP = 2 | NN = 3
+        
+        Interesting. The difference from PP to PN is -1, but from NP to NN is +1. 
+        Realistically, I think this might be because of how I coded it - this math issue is my own fault.
+        But what I do see is that if the first output is negative and the value is *actually negative*, 
+            then I can always subtract one (getting 1-1 = 0 or -2-1 = -3) then take the ABS.
+
+            If the SECOND condition is negative, subtract one.
+            Then, either sign, take ABS:
+            P =  1  ->  ABS( 1 - 1) = ABS( 0) = 0
+            N = -2  ->  ABS(-2 - 1) = ABS(-3) = 3
+        
+        Lastly, just a "set" statement. I am disappointed that the math isn't super easy starting at 0. 
+        Like, if I had positive : +1; negative : -1; but since negative is -2, we're just in force-declaration teritory. 
+        I'm also not going to spend too much time figuring this out for now. 
+        I feel like I'll need to come back to it later when my camera starts moving.
+
+    */
+    int index = (cos(thetaY) >= 0) ? 1 : -2;
+    index = (sin(thetaY) >= 0) ? abs(index) : abs(index - 1);
+    index = (sin(thetaX) >= 0) ? index : index + 4;
+    return index;
+}
+
+void drawCubeFaces(Cube c) {
+
+    int index = getCloesestVertexIndex(c);
+
+    char buffer[50] = {0};
+
+    sprintf_s(buffer, _countof(buffer), "Winning Vertex: %d", index);
+    CP_Settings_Fill(CP_Color_Create(255, 255, 255, 255));
+    CP_Font_DrawText(buffer, 0, -150);
+
+    if (index == 0 || index == 1 || index == 5 || index == 4) {
+        CP_Settings_Fill(CP_Color_Create(255, 0, 0, 255));
+        CP_Graphics_DrawQuad(
+            c.points2D[0].x, c.points2D[0].y,
+            c.points2D[1].x, c.points2D[1].y,
+            c.points2D[5].x, c.points2D[5].y,
+            c.points2D[4].x, c.points2D[4].y);
+    }
+
+    if (index == 2 || index == 1 || index == 5 || index == 6) {
+        CP_Settings_Fill(CP_Color_Create(255, 255, 0, 255));
+        CP_Graphics_DrawQuad(
+            c.points2D[1].x, c.points2D[1].y,
+            c.points2D[2].x, c.points2D[2].y,
+            c.points2D[6].x, c.points2D[6].y,
+            c.points2D[5].x, c.points2D[5].y);
+    }
+
+    if (index == 2 || index == 3 || index == 7 || index == 6) {
+        CP_Settings_Fill(CP_Color_Create(255, 0, 255, 255));
+        CP_Graphics_DrawQuad(
+            c.points2D[2].x, c.points2D[2].y,
+            c.points2D[3].x, c.points2D[3].y,
+            c.points2D[7].x, c.points2D[7].y,
+            c.points2D[6].x, c.points2D[6].y);
+    }
+    
+    if (index == 0 || index == 3 || index == 7 || index == 4) {
+        CP_Settings_Fill(CP_Color_Create(0, 255, 255, 255));
+        CP_Graphics_DrawQuad(
+            c.points2D[3].x, c.points2D[3].y,
+            c.points2D[0].x, c.points2D[0].y,
+            c.points2D[4].x, c.points2D[4].y,
+            c.points2D[7].x, c.points2D[7].y);
+    }
+    
+    if (index == 0 || index == 1 || index == 2 || index == 3) {
+        CP_Settings_Fill(CP_Color_Create(0, 0, 255, 255));
+        CP_Graphics_DrawQuad(
+            c.points2D[0].x, c.points2D[0].y,
+            c.points2D[1].x, c.points2D[1].y,
+            c.points2D[2].x, c.points2D[2].y,
+            c.points2D[3].x, c.points2D[3].y);
+    }
+    
+    if (index == 7 || index == 6 || index == 5 || index == 4) {
+        CP_Settings_Fill(CP_Color_Create(0, 255, 0, 255));
+        CP_Graphics_DrawQuad(
+            c.points2D[4].x, c.points2D[4].y,
+            c.points2D[5].x, c.points2D[5].y,
+            c.points2D[6].x, c.points2D[6].y,
+            c.points2D[7].x, c.points2D[7].y);
+    }
+        
 }
 
 void game_update(void)
@@ -164,15 +304,13 @@ void game_update(void)
 
     for (int i = 0; i < CUBE_POINTS_ARRAY_SIZE; i++) {
         CP_Vector curP = cubes[0].points2D[i];
-        CP_Graphics_DrawCircle(curP.x, curP.y, 10);
+        CP_Graphics_DrawCircle(curP.x, curP.y, 7);
 
-        sprintf_s(buffer, _countof(buffer), "Cube Point %d: %.1f, %.1f", i, curP.x, curP.y);
-        CP_Font_DrawText(buffer, 50, 70+40*(i+1));
+        //sprintf_s(buffer, _countof(buffer), "Cube Point %d: %.1f, %.1f", i, curP.x, curP.y);
+        //CP_Font_DrawText(buffer, 50, 70+40*(i+1));
     }
-
-    thetaX += 0.03;
-    thetaY += 0.02;
-    //thetaZ += 0.01;
+    //drawCubeLines(cubes[0]);
+    drawCubeFaces(cubes[0]);
 
     cubes[0] = projectPoints(cubes[0]);
 
@@ -182,22 +320,57 @@ void game_update(void)
     if (CP_Input_KeyReleased(KEY_ESCAPE)) CP_Engine_Terminate();
     if (CP_Input_KeyReleased(KEY_R)) CP_Engine_SetNextGameStateForced(game_init, game_update, game_exit);
 
-    if (CP_Input_KeyDown(KEY_W) || CP_Input_KeyDown(KEY_UP))    scalarValue += 0.05f;
-    if (CP_Input_KeyDown(KEY_S) || CP_Input_KeyDown(KEY_DOWN))  scalarValue -= 0.05f;
+    if (CP_Input_KeyDown(KEY_UP)) { 
+        thetaX += thetaIncrement * cos(thetaY);
+        thetaZ += thetaIncrement * sin(thetaY);
+    }
+    if (CP_Input_KeyDown(KEY_DOWN)) {
+        thetaX -= thetaIncrement * cos(thetaY);
+        thetaZ -= thetaIncrement * sin(thetaY);
+    }
+    if (CP_Input_KeyDown(KEY_W)) {
+        thetaX += 0.02f;
+    }
+    if (CP_Input_KeyDown(KEY_S)) {
+        thetaZ += 0.02f;
+    }
+
     if (CP_Input_KeyDown(KEY_A) || CP_Input_KeyDown(KEY_LEFT))  {
-        position.x -= 15.0f;
-        //theta += CP_Math_Radians(1.0f);
+        thetaY += 0.02f;
     }
     if (CP_Input_KeyDown(KEY_D) || CP_Input_KeyDown(KEY_RIGHT)) {
-        position.x += 15.0f;
-        //theta -= CP_Math_Radians(1.0f);
+        thetaY -= 0.02f;
     }
 
 
+
+    sprintf_s(buffer, _countof(buffer), "cos(tY): %.2f", cos(thetaY));
+    CP_Settings_Fill(CP_Color_Create(255, 255, 255, 255));
+    CP_Font_DrawText(buffer, 0, 110);
+
+
+    sprintf_s(buffer, _countof(buffer), "sin(tY): %.2f", sin(thetaY));
+    CP_Settings_Fill(CP_Color_Create(255, 255, 255, 255));
+    CP_Font_DrawText(buffer, 0, 150);
+
+    sprintf_s(buffer, _countof(buffer), "sin(tX): %.2f", sin(thetaX));
+    CP_Settings_Fill(CP_Color_Create(255, 255, 255, 255));
+    CP_Font_DrawText(buffer, 0, 230);
+
+    sprintf_s(buffer, _countof(buffer), "cos(tX): %.2f", cos(thetaX));
+    CP_Settings_Fill(CP_Color_Create(255, 255, 255, 255));
+    CP_Font_DrawText(buffer, 0, 190);
+
+    sprintf_s(buffer, _countof(buffer), "sin(tZ): %.2f", sin(thetaZ));
+    CP_Settings_Fill(CP_Color_Create(255, 255, 255, 255));
+    CP_Font_DrawText(buffer, 0, 270);
+
+    sprintf_s(buffer, _countof(buffer), "cos(tZ): %.2f", cos(thetaZ));
+    CP_Settings_Fill(CP_Color_Create(255, 255, 255, 255));
+    CP_Font_DrawText(buffer, 0, 310);
 }
 
-void game_exit(void)
-{
+void game_exit(void) {
 }
 
 int main(void)
