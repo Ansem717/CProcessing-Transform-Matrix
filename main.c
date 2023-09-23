@@ -15,6 +15,8 @@
 #include "cprocessing.h"
 #include <math.h>
 
+#define CUBE_POINTS_ARRAY_SIZE 8
+
 CP_Vector position;
 CP_Matrix translate;
 CP_Matrix scale;
@@ -23,7 +25,60 @@ CP_Matrix rotate;
 float scalarValue;
 float theta;
 
+typedef struct {
+    float xPos;
+    float yPos;
+    float zPos;
+    float width;
+    float height;
+    float depth;
+    CP_Matrix points3D[CUBE_POINTS_ARRAY_SIZE];
+    CP_Vector points2D[CUBE_POINTS_ARRAY_SIZE];
+} Cube;
+
+CP_Matrix projMatrix;
+Cube cubes[10] = { 0 };
+
 void game_exit(void);
+void projectPoints(Cube);
+
+CP_Matrix newVec3(float x, float y, float z) {
+    return CP_Matrix_Set(
+        x, 0, 0,
+        y, 0, 0,
+        z, 0, 0
+    );
+}
+
+Cube newCube(float x, float y, float z, float w, float h, float d) {
+    Cube c = { 0 };
+    c.points3D[0] = newVec3(x - w / 2, y - h / 2, z - d / 2);
+    c.points3D[1] = newVec3(x + w / 2, y - h / 2, z - d / 2);
+    c.points3D[2] = newVec3(x + w / 2, y - h / 2, z + d / 2);
+    c.points3D[3] = newVec3(x - w / 2, y - h / 2, z + d / 2);
+    c.points3D[4] = newVec3(x - w / 2, y + h / 2, z - d / 2);
+    c.points3D[5] = newVec3(x + w / 2, y + h / 2, z - d / 2);
+    c.points3D[6] = newVec3(x + w / 2, y + h / 2, z + d / 2);
+    c.points3D[7] = newVec3(x - w / 2, y + h / 2, z + d / 2);
+
+    c.xPos = x;
+    c.yPos = y;
+    c.zPos = z;
+    c.depth = d;
+    c.height = h;
+    c.width = w;
+
+    projectPoints(c);
+
+    return c;
+}
+
+void projectPoints(Cube c) {
+    for (int i = 0; i < CUBE_POINTS_ARRAY_SIZE; i++) {
+        CP_Matrix projectionMultipled = CP_Matrix_Multiply(projMatrix, c.points3D[i]);
+        c.points2D[i] = CP_Vector_Set(projectionMultipled.m00, projectionMultipled.m10);
+    }
+}
 
 void game_init(void)
 {
@@ -34,6 +89,10 @@ void game_init(void)
     scalarValue = 1.0f;
     rotate = CP_Matrix_Rotate(0.0f);
     theta = 0;
+
+    projMatrix = CP_Matrix_Set(1, 0, 0, 0, 1, 0, 0, 0, 0);
+
+    cubes[0] = newCube(0, 0, 0, 100, 100, 100);
 
 	CP_Settings_RectMode(CP_POSITION_CENTER);
 	CP_Settings_NoFill();
@@ -51,16 +110,15 @@ void game_update(void)
 {
     CP_Graphics_ClearBackground(CP_Color_Create(0, 0, 0, 255));
 
-    // Combine transform (translate * rotation * scale)
-
     scale = CP_Matrix_Scale(CP_Vector_Set(scalarValue, scalarValue));
     translate = CP_Matrix_Translate(position);
 
     CP_Matrix transform = CP_Matrix_Multiply(translate, CP_Matrix_Multiply(rotate, scale));
 
-    CP_Settings_ApplyMatrix(transform);
-    
-    drawRectAsQuad(0, 0, 100, 100);
+    //CP_Settings_ApplyMatrix(transform);
+    //drawRectAsQuad(0, 0, 100, 100);
+
+
 
     /*********\
     | CONTROL |
