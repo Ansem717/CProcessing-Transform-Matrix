@@ -13,9 +13,12 @@
 //---------------------------------------------------------
 
 #include "cprocessing.h"
+#include <stdio.h>
+#include <stdlib.h>
 #include <math.h>
 
 #define CUBE_POINTS_ARRAY_SIZE 8
+#define CUBES_ARRAY_SIZE 10
 
 CP_Vector position;
 CP_Matrix translate;
@@ -23,7 +26,9 @@ CP_Matrix scale;
 CP_Matrix rotate;
 
 float scalarValue;
-float theta;
+float thetaX;
+float thetaY;
+float thetaZ;
 
 typedef struct {
     float xPos;
@@ -37,10 +42,11 @@ typedef struct {
 } Cube;
 
 CP_Matrix projMatrix;
-Cube cubes[10] = { 0 };
+
+Cube cubes[CUBES_ARRAY_SIZE] = { 0 };
 
 void game_exit(void);
-void projectPoints(Cube);
+Cube projectPoints(Cube);
 
 CP_Matrix newVec3(float x, float y, float z) {
     return CP_Matrix_Set(
@@ -68,17 +74,48 @@ Cube newCube(float x, float y, float z, float w, float h, float d) {
     c.height = h;
     c.width = w;
 
-    projectPoints(c);
+    c = projectPoints(c);
 
     return c;
 }
 
-void projectPoints(Cube c) {
+
+CP_Matrix rotationX() {
+    return CP_Matrix_Set(1, 0, 0, 0, cos(thetaX), -sin(thetaX), 0, sin(thetaX), cos(thetaX));
+}
+
+CP_Matrix rotationY() {
+    return CP_Matrix_Set(cos(thetaY), 0, sin(thetaY), 0, 1, 0, -sin(thetaY), 0, cos(thetaY));
+}
+
+CP_Matrix rotationZ() {
+    return CP_Matrix_Set(cos(thetaZ), -sin(thetaZ), 0, sin(thetaZ), cos(thetaZ), 0, 0, 0, 1);
+}
+
+Cube projectPoints(Cube c) {
     for (int i = 0; i < CUBE_POINTS_ARRAY_SIZE; i++) {
-        CP_Matrix projectionMultipled = CP_Matrix_Multiply(projMatrix, c.points3D[i]);
+
+
+
+        CP_Matrix projectionMultipled = CP_Matrix_Multiply(
+            projMatrix,
+            CP_Matrix_Multiply(
+                rotationZ(),
+                CP_Matrix_Multiply(
+                    rotationY(),
+                    CP_Matrix_Multiply(
+                        rotationX(),
+                        c.points3D[i]
+                    )
+                )
+            )
+        );
         c.points2D[i] = CP_Vector_Set(projectionMultipled.m00, projectionMultipled.m10);
     }
+    return c;
 }
+
+
 
 void game_init(void)
 {
@@ -88,7 +125,9 @@ void game_init(void)
     // Create a transform matrix
     scalarValue = 1.0f;
     rotate = CP_Matrix_Rotate(0.0f);
-    theta = 0;
+    thetaX = 0;
+    thetaY = 0;
+    thetaZ = 0;
 
     projMatrix = CP_Matrix_Set(1, 0, 0, 0, 1, 0, 0, 0, 0);
 
@@ -98,12 +137,14 @@ void game_init(void)
 	CP_Settings_NoFill();
     CP_Settings_Stroke(CP_Color_Create(255, 255, 255, 255));
     CP_Settings_StrokeWeight(1.0f);
+    CP_Settings_TextSize(25.0f);
+    CP_Settings_TextAlignment(CP_TEXT_ALIGN_H_CENTER, CP_TEXT_ALIGN_V_MIDDLE);
 }
 
 void drawRectAsQuad(float x, float y, float w, float h) {
     float w2 = w / 2;
     float h2 = h / 2;
-    CP_Graphics_DrawQuad(x - w2, y - h2 - tan(theta)*w, x - w2, y + h2 + tan(theta)*w, x + h2, y + h2 + tan(theta) * w, x + h2, y - h2 - tan(theta) * w);
+    //CP_Graphics_DrawQuad(x - w2, y - h2 - tan(theta)*w, x - w2, y + h2 + tan(theta)*w, x + h2, y + h2 + tan(theta) * w, x + h2, y - h2 - tan(theta) * w);
 }
 
 void game_update(void)
@@ -115,10 +156,25 @@ void game_update(void)
 
     CP_Matrix transform = CP_Matrix_Multiply(translate, CP_Matrix_Multiply(rotate, scale));
 
-    //CP_Settings_ApplyMatrix(transform);
+    CP_Settings_ApplyMatrix(transform);
     //drawRectAsQuad(0, 0, 100, 100);
 
+    char buffer[50] = { 0 };
+    
 
+    for (int i = 0; i < CUBE_POINTS_ARRAY_SIZE; i++) {
+        CP_Vector curP = cubes[0].points2D[i];
+        CP_Graphics_DrawCircle(curP.x, curP.y, 10);
+
+        sprintf_s(buffer, _countof(buffer), "Cube Point %d: %.1f, %.1f", i, curP.x, curP.y);
+        CP_Font_DrawText(buffer, 50, 70+40*(i+1));
+    }
+
+    thetaX += 0.03;
+    thetaY += 0.02;
+    //thetaZ += 0.01;
+
+    cubes[0] = projectPoints(cubes[0]);
 
     /*********\
     | CONTROL |
@@ -130,11 +186,11 @@ void game_update(void)
     if (CP_Input_KeyDown(KEY_S) || CP_Input_KeyDown(KEY_DOWN))  scalarValue -= 0.05f;
     if (CP_Input_KeyDown(KEY_A) || CP_Input_KeyDown(KEY_LEFT))  {
         position.x -= 15.0f;
-        theta += CP_Math_Radians(1.0f);
+        //theta += CP_Math_Radians(1.0f);
     }
     if (CP_Input_KeyDown(KEY_D) || CP_Input_KeyDown(KEY_RIGHT)) {
         position.x += 15.0f;
-        theta -= CP_Math_Radians(1.0f);
+        //theta -= CP_Math_Radians(1.0f);
     }
 
 
