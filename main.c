@@ -105,11 +105,11 @@ Cube projectPoints(Cube c) {
         CP_Matrix projectionMultipled = CP_Matrix_Multiply(
             projMatrix,
             CP_Matrix_Multiply(
-                rotationZ(),
+                rotationX(),
                 CP_Matrix_Multiply(
                     rotationY(),
                     CP_Matrix_Multiply(
-                        rotationX(),
+                        rotationZ(),
                         c.points3D[i]
                     )
                 )
@@ -309,8 +309,8 @@ void game_update(void)
         //sprintf_s(buffer, _countof(buffer), "Cube Point %d: %.1f, %.1f", i, curP.x, curP.y);
         //CP_Font_DrawText(buffer, 50, 70+40*(i+1));
     }
-    //drawCubeLines(cubes[0]);
-    drawCubeFaces(cubes[0]);
+    drawCubeLines(cubes[0]);
+    //drawCubeFaces(cubes[0]);
 
     cubes[0] = projectPoints(cubes[0]);
 
@@ -336,10 +336,12 @@ void game_update(void)
     }
 
     if (CP_Input_KeyDown(KEY_A) || CP_Input_KeyDown(KEY_LEFT))  {
-        thetaY += 0.02f;
+        thetaY -= thetaIncrement * cos(thetaX);
+        thetaZ -= thetaIncrement * sin(thetaX);
     }
     if (CP_Input_KeyDown(KEY_D) || CP_Input_KeyDown(KEY_RIGHT)) {
-        thetaY -= 0.02f;
+        thetaY += thetaIncrement * cos(thetaX);
+        thetaZ += thetaIncrement * sin(thetaX);
     }
 
 
